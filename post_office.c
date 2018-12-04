@@ -1,3 +1,7 @@
+//Name : Pooja Kittur
+//Course name : "COSC 6360--Operating Systems"
+//Assignment : 3
+
 #include<stdio.h>
 #include<unistd.h>
 #include<stdlib.h>
@@ -8,7 +12,10 @@ static int NUM_FREE_CLERKS = 0;
 static int NUM_CUST_WAIT = 0;
 static int NUM_CUST_ARRIVED = 0;
 
+//Declaring the mutex
 static pthread_mutex_t post_office;
+
+//Creating condition variable
 static pthread_cond_t free_clerk = PTHREAD_COND_INITIALIZER;
 
 void * customerOperation(void *);
@@ -17,7 +24,7 @@ struct Customer{
 	int customerId;
 	int delay;
 	int serviceTime;
-}newCustomer[100];
+} *newCustomer;
 
 int main(int argc, char** argv){
 
@@ -29,20 +36,33 @@ int main(int argc, char** argv){
 	pthread_t tid;
 	pthread_t custtid[MAXCUSTOMER];
 	
+	if(argc < 2){
+		printf("Please provide the number of clerks\n");
+		exit(0);
+	}
+	
+	//Allocate memory dynamically
+	newCustomer = malloc(MAXCUSTOMER *sizeof(newCustomer));
+
+	//Fetching total number of clerks from command line and converting it to int
 	totalNumberOfClerks = atoi(argv[1]);
 	NUM_FREE_CLERKS = totalNumberOfClerks;
 
-	printf("--The Post office has %d clerks--\n", totalNumberOfClerks);
+	printf("--The Post office has %d clerk(s)--\n", totalNumberOfClerks);
 
-	//create a lock
+	//create a lock(mutex)
 	pthread_mutex_init(&post_office, NULL);
 
+	//Read the input file line by line
 	while(scanf("%d %d %d", &customerID, &delay, &serviceTime) > 0){
-
-		//printf("Customer id is : %d\n", customerID);
-		//printf("Delay is : %d\n", delay);
-		//printf("Service Time is : %d\n", serviceTime);
 		
+		//Reallocate the memory if the maximum customers reaches the initial capacity 100
+		if(numCust >= MAXCUSTOMER)
+		{
+			MAXCUSTOMER = MAXCUSTOMER + MAXCUSTOMER;
+			newCustomer = realloc(newCustomer, MAXCUSTOMER *sizeof(newCustomer));
+		}
+
 		if(delay > 0){
 			sleep(delay);
 		}
@@ -56,9 +76,9 @@ int main(int argc, char** argv){
 		numCust++;
 	}
 
+	//Wait till all the threads terminate
 	for(i=1; i<=numCust; i++){
 		pthread_join(custtid[i], NULL);
-		//printf(" cust %d joined\n",i);
 	}
 
 	printf("%d customer(s) went serviced.\n", NUM_CUST_ARRIVED);
@@ -71,7 +91,7 @@ int main(int argc, char** argv){
 
 void *customerOperation(void *arg){
 	int serviceTime;
-	//customerId = (int) arg;
+	
 	struct Customer *arrivedCustomer = malloc(sizeof(struct Customer));
 	arrivedCustomer = (struct Customer *) arg;
 	serviceTime = arrivedCustomer -> serviceTime;
@@ -81,21 +101,21 @@ void *customerOperation(void *arg){
 	printf("Customer # %d arrives at the post office\n", arrivedCustomer -> customerId); 
 
 	NUM_CUST_ARRIVED++;
-	//printf("Number of cust incremented\n");
 
+	//If all the clerks are busy
 	while(NUM_FREE_CLERKS == 0){
 		
 		NUM_CUST_WAIT++;
 		
-		//printf("Waiting on a conditional variable\n");
 		//wait on condition variable
 		pthread_cond_wait(&free_clerk, &post_office);
-		//printf("Wait over \n");
 	}	
 	
-	//printf("Decrementing num of clerks \n");
+	//Clerk is serving the customer
 	NUM_FREE_CLERKS--;
 	printf("Customer # %d starts getting helped\n", arrivedCustomer -> customerId);
+
+	//Unlock the mutex
 	pthread_mutex_unlock(&post_office);
 	
 	//sleep for service time
@@ -103,11 +123,13 @@ void *customerOperation(void *arg){
 		
 	pthread_mutex_lock(&post_office);
 	printf("Customer # %d leaves the post office\n", arrivedCustomer -> customerId);
+	//Clerk is freed
 	NUM_FREE_CLERKS++;
+
+	//Signal the thread which is waiting for a clerk using condition variable
 	pthread_cond_signal(&free_clerk);
 	pthread_mutex_unlock(&post_office);
 
-	//pthread_exit((void*) 0);
 }
 	
 
